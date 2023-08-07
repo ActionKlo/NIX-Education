@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 )
@@ -41,6 +42,14 @@ func main() {
 			}
 
 			sb := string(body)
+
+			message := []byte(sb)
+			name := "storage/posts/" + strconv.Itoa(i) + ".txt"
+
+			err = os.WriteFile(name, message, 0644)
+			if err != nil {
+				log.Fatalln(err)
+			}
 
 			ch <- sb
 		}(i)
