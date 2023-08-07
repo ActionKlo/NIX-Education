@@ -1,0 +1,40 @@
+# Compiled binary files
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Env file
+.env
+
+# Compiled object files, libraries, and plugins
+*.o
+*.a
+*.slo
+*.lo
+*.la
+*.lai
+*.pc
+
+# Generated files
+_*
+_goapi
+
+# Go specific
+# Binary
+go.sum
+
+# Go testing
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Project-specific directories
+.idea/
+.vscode/
+
+# OS-specific files
+Thumbs.db
+.DS_Store
