@@ -35,6 +35,9 @@ go.sum
 .idea/
 .vscode/
 
+# Post files
+storage/posts/*.txt
+
 # OS-specific files
 Thumbs.db
 .DS_Store
