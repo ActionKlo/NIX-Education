@@ -1,58 +1,55 @@
 package main
 
 import (
-	"fmt"
-	"io"
+	nix "NIX-Education"
+	"context"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 	"log"
-	"net/http"
 	"os"
-	"strconv"
 	"sync"
 )
 
+func createDBPool() (*pgxpool.Pool, error) {
+	dbPool, err := pgxpool.New(context.Background(), os.Getenv("DB_URL"))
+
+	if err != nil {
+		log.Fatalln("Connect Config err:", err)
+		return nil, err
+	}
+
+	return dbPool, nil
+}
+
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	dbPool, err := createDBPool()
+	if err != nil {
+		log.Fatalln("createDBPool err:", err)
+	}
+	defer dbPool.Close()
+
+	ctx := context.Background()
+
 	ch := make(chan string)
 	var wg sync.WaitGroup
 
-	for i := 1; i <= 5; i++ {
+	// Цикл для получения всех постов и сохранению их в файлы (согласно заданию)
+	for i := 1; i <= 2; i++ { // if i = 100 -> server sent GOAWAY and closed the connection
 		wg.Add(1)
 
-		go func(i int) {
-			defer wg.Done()
+		go nix.SaveInFile(i, ch, &wg)
 
-			res, err := http.Get("https://jsonplaceholder.typicode.com/posts/" + strconv.Itoa(i))
+	}
 
-			if err != nil {
-				log.Fatalln(err)
-				return
-			}
+	for i := 1; i <= 10; i++ {
+		wg.Add(1)
 
-			defer func(Body io.ReadCloser) {
-				err = Body.Close()
-				if err != nil {
-					log.Fatalln(err)
-					return
-				}
-			}(res.Body)
-
-			body, err := io.ReadAll(res.Body)
-			if err != nil {
-				log.Fatalln(err)
-				return
-			}
-
-			sb := string(body)
-
-			message := []byte(sb)
-			name := "storage/posts/" + strconv.Itoa(i) + ".txt"
-
-			err = os.WriteFile(name, message, 0644)
-			if err != nil {
-				log.Fatalln(err)
-			}
-
-			ch <- sb
-		}(i)
+		go nix.InsertPosts(i, ctx, dbPool, &wg)
 	}
 
 	go func() {
@@ -60,7 +57,9 @@ func main() {
 		close(ch)
 	}()
 
-	for b := range ch {
-		fmt.Println(b)
+	for {
+		if _, ok := <-ch; !ok {
+			break
+		}
 	}
 }
