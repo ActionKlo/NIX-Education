@@ -3,6 +3,7 @@ package main
 import (
 	nix "NIX-Education"
 	"context"
+	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"log"
@@ -33,7 +34,7 @@ func main() {
 	}
 	defer dbPool.Close()
 
-	ctx := context.Background()
+	//ctx := context.Background()
 
 	ch := make(chan string)
 	var wg sync.WaitGroup
@@ -42,15 +43,28 @@ func main() {
 	for i := 1; i <= 2; i++ { // if i = 100 -> server sent GOAWAY and closed the connection
 		wg.Add(1)
 
-		go nix.SaveInFile(i, ch, &wg)
+		//  уже выглядит дико =\
+		//var post nix.Post
+		var posts []nix.Posts
 
+		//url := "https://jsonplaceholder.typicode.com/posts?userId=" + strconv.Itoa(i)
+		//posts.GetFromJP(url)
+		//for _, item := range posts {
+		//	item.GetFromJP(url)
+		//}
+		//posts[0].GetFromJP(url)
+
+		//nix.GetFromJP(url, posts)
+
+		fmt.Println(posts)
+		//go nix.SaveInFile(i, ch, &wg)
 	}
 
-	for i := 1; i <= 10; i++ {
-		wg.Add(1)
-
-		go nix.InsertPosts(i, ctx, dbPool, &wg)
-	}
+	//for i := 1; i <= 10; i++ {
+	//	wg.Add(1)
+	//
+	//	go nix.InsertPosts(i, ctx, dbPool, &wg)
+	//}
 
 	go func() {
 		wg.Wait()

@@ -11,6 +11,11 @@ import (
 	"sync"
 )
 
+type Interfacer interface {
+	GetFromJP(url string)
+	GetFromDB(query string, ctx context.Context, DBPool *pgxpool.Pool)
+}
+
 type Post struct {
 	Id, UserId  int
 	Title, Body string
@@ -20,6 +25,53 @@ type Comment struct {
 	Id, PostId        int
 	Name, Email, Body string
 }
+
+type Posts []Post
+
+func (p Post) GetFromJP(url string) {
+	res, err := http.Get(url)
+	if err != nil {
+		log.Fatalln("Error get posts:", err)
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Fatalln("io.ReadAll body err:", err)
+	}
+
+	err = json.Unmarshal([]byte(body), &p)
+	if err != nil {
+		log.Fatalln("Unmarshal err:", err)
+	}
+}
+
+func (p Post) GetFromDB(query string, ctx context.Context, DBPool *pgxpool.Pool) {
+
+}
+
+//func (c Comment) GetFromJP(url string) []Comments {
+//	res, err := http.Get(url)
+//	if err != nil {
+//		log.Fatalln("Error get comments:", err)
+//	}
+//
+//	body, err := io.ReadAll(res.Body)
+//	if err != nil {
+//		log.Fatalln("io.ReadAll body err:", err)
+//	}
+//
+//	var comments []Comment
+//	err = json.Unmarshal([]byte(body), &comments)
+//	if err != nil {
+//		log.Fatalln("Unmarshal err:", err)
+//	}
+//
+//	return comments
+//}
+//
+//func (c Comment) GetFromDB(query string, ctx context.Context, DBPool *pgxpool.Pool) {
+//
+//}
 
 // можно ли не прокидывать сюда контекст а отправить его сразу в getCommentsByPostId()?
 // точно можно, но не знаю как
