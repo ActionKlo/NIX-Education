@@ -3,6 +3,7 @@ package nix
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"io"
 	"log"
@@ -12,7 +13,7 @@ import (
 )
 
 type Interfacer interface {
-	GetFromJP(url string)
+	GetFromJP(url string) interface{}
 	GetFromDB(query string, ctx context.Context, DBPool *pgxpool.Pool)
 }
 
@@ -28,7 +29,7 @@ type Comment struct {
 
 type Posts []Post
 
-func (p Post) GetFromJP(url string) {
+func (p Post) GetFromJP(url string) interface{} {
 	res, err := http.Get(url)
 	if err != nil {
 		log.Fatalln("Error get posts:", err)
@@ -39,10 +40,13 @@ func (p Post) GetFromJP(url string) {
 		log.Fatalln("io.ReadAll body err:", err)
 	}
 
-	err = json.Unmarshal([]byte(body), &p)
+	var posts []Post
+	err = json.Unmarshal([]byte(body), &posts)
 	if err != nil {
 		log.Fatalln("Unmarshal err:", err)
 	}
+
+	return posts
 }
 
 func (p Post) GetFromDB(query string, ctx context.Context, DBPool *pgxpool.Pool) {
@@ -93,12 +97,12 @@ func getPostsByUserId(userId int, ctx context.Context, dbPool *pgxpool.Pool, wg 
 		log.Fatalln("Unmarshal err:", err)
 	}
 
-	// по идее тут вставить цикл в котором будет go GET /comments?postId=(5)
-	// insertComments ?????
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go InsertComments(posts[i].Id, ctx, dbPool, wg)
-	}
+	//// по идее тут вставить цикл в котором будет go GET /comments?postId=(5)
+	//// insertComments ?????
+	//for i := 0; i < 10; i++ {
+	//	wg.Add(1)
+	//	go InsertComments(posts[i].Id, ctx, dbPool, wg)
+	//}
 
 	return posts
 }
@@ -134,13 +138,22 @@ func InsertPosts(userId int, ctx context.Context, dbPool *pgxpool.Pool, wg *sync
 
 	posts := getPostsByUserId(userId, ctx, dbPool, wg)
 
-	query := "INSERT INTO posts VALUES ($1, $2, $3, $4)"
+	query := `INSERT INTO posts (id, userId, title, body) VALUES `
 
 	for i := 0; i < 10; i++ {
-		_, err := dbPool.Exec(ctx, query, posts[i].Id, posts[i].UserId, posts[i].Title, posts[i].Body)
-		if err != nil {
-			log.Fatalln("Exec err:", err)
+		lastLetter := ", "
+		if i == 9 {
+			lastLetter = ";"
 		}
+
+		values := fmt.Sprintf("(%d, %d, '%s', '%s')", posts[i].Id, posts[i].UserId, posts[i].Title, posts[i].Body)
+		query = query + values + lastLetter
+
+	}
+
+	_, err = dbPool.Query(ctx, query)
+	if err != nil {
+		log.Fatalln("Insert post query err:", err)
 	}
 }
 
@@ -156,12 +169,21 @@ func InsertComments(postId int, ctx context.Context, dbPool *pgxpool.Pool, wg *s
 
 	comments := getCommentsByPostId(postId, ctx, dbPool, wg)
 
-	query := "INSERT INTO comments VALUES ($1, $2, $3, $4, $5)"
+	query := "INSERT INTO comments (id, postId, name, email, body) VALUES "
 
 	for i := 0; i < 5; i++ {
-		_, err := dbPool.Exec(ctx, query, comments[i].Id, comments[i].PostId, comments[i].Name, comments[i].Email, comments[i].Body)
-		if err != nil {
-			log.Fatalln("Exec err:", err)
+		lastLetter := ", "
+		if i == 4 {
+			lastLetter = ";"
 		}
+
+		values := fmt.Sprintf("(%d, %d, '%s', '%s', '%s')", comments[i].Id, comments[i].PostId, comments[i].Name, comments[i].Email, comments[i].Body)
+		query = query + values + lastLetter
+
+	}
+
+	_, err = dbPool.Query(ctx, query)
+	if err != nil {
+		log.Fatalln("Insert comments query err:", err)
 	}
 }
