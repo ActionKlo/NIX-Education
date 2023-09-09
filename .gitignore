@@ -25,6 +25,8 @@ _goapi
 # Binary
 go.sum
 
+vendor/
+
 # Go testing
 *.test
 

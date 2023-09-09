@@ -1,4 +1,4 @@
-package nix
+package service
 
 import (
 	"io"
@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-func SaveInFile(i int, ch chan string, wg *sync.WaitGroup) {
+func SaveInFile(i int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	res, err := http.Get("https://jsonplaceholder.typicode.com/posts/" + strconv.Itoa(i))
@@ -40,6 +40,4 @@ func SaveInFile(i int, ch chan string, wg *sync.WaitGroup) {
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	ch <- sb
 }

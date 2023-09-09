@@ -1,12 +1,13 @@
 package main
 
 import (
-	nix "NIX-Education"
+	nix "NIX-Education/internal/service"
 	"context"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 )
 
@@ -35,31 +36,57 @@ func main() {
 
 	ctx := context.Background()
 
-	ch := make(chan string)
 	var wg sync.WaitGroup
 
-	// Цикл для получения всех постов и сохранению их в файлы (согласно заданию)
-	for i := 1; i <= 2; i++ { // if i = 100 -> server sent GOAWAY and closed the connection
+	for i := 1; i <= 100; i++ {
 		wg.Add(1)
 
-		go nix.SaveInFile(i, ch, &wg)
+		go nix.SaveInFile(i, &wg)
+	}
 
+	var post nix.Post
+	var comment nix.Comment
+
+	_, err = dbPool.Exec(ctx, "TRUNCATE posts, comments")
+	if err != nil {
+		log.Fatalln(err)
 	}
 
 	for i := 1; i <= 10; i++ {
 		wg.Add(1)
 
-		go nix.InsertPosts(i, ctx, dbPool, &wg)
+		go func(i int) {
+			defer wg.Done()
+
+			urlPost := "https://jsonplaceholder.typicode.com/posts?userId=" + strconv.Itoa(i)
+
+			posts := post.ReadFromJP(urlPost).([]nix.Post)
+
+			for _, post := range posts {
+				wg.Add(1)
+
+				go func(post nix.Post) {
+					defer wg.Done()
+
+					post.WriteToDB(ctx, dbPool, &wg)
+
+					urlComm := "https://jsonplaceholder.typicode.com/comments?postId=" + strconv.Itoa(post.Id)
+
+					comments := comment.ReadFromJP(urlComm).([]nix.Comment)
+
+					for _, comment := range comments {
+						wg.Add(1)
+
+						go func(comment nix.Comment) {
+							defer wg.Done()
+							comment.WriteToDB(ctx, dbPool, &wg)
+						}(comment)
+
+					}
+				}(post)
+			}
+		}(i)
 	}
 
-	go func() {
-		wg.Wait()
-		close(ch)
-	}()
-
-	for {
-		if _, ok := <-ch; !ok {
-			break
-		}
-	}
+	wg.Wait()
 }
