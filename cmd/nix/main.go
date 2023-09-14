@@ -1,21 +1,25 @@
 package main
 
 import (
-	nix "NIX-Education/internal/service"
+	"NIX-Education/internal/handler"
+	"NIX-Education/internal/model"
+	"NIX-Education/internal/service"
 	"context"
+	"errors"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"log"
 	"os"
-	"strconv"
 	"sync"
 )
 
-func createDBPool() (*pgxpool.Pool, error) {
-	dbPool, err := pgxpool.New(context.Background(), os.Getenv("DB_URL"))
+const (
+	NumberOfUsers = 10
+)
 
+func CreateDBPool() (*pgxpool.Pool, error) {
+	dbPool, err := pgxpool.New(context.Background(), os.Getenv("DB_URL"))
 	if err != nil {
-		log.Fatalln("Connect Config err:", err)
 		return nil, err
 	}
 
@@ -28,58 +32,59 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	dbPool, err := createDBPool()
-	if err != nil {
-		log.Fatalln("createDBPool err:", err)
-	}
-	defer dbPool.Close()
-
-	ctx := context.Background()
-
 	var wg sync.WaitGroup
+	var postgres service.PostgresService
 
-	for i := 1; i <= 100; i++ {
-		wg.Add(1)
-
-		go nix.SaveInFile(i, &wg)
-	}
-
-	var post nix.Post
-	var comment nix.Comment
-
-	_, err = dbPool.Exec(ctx, "TRUNCATE posts, comments")
+	postgres.DB, err = CreateDBPool()
 	if err != nil {
 		log.Fatalln(err)
 	}
+	defer postgres.DB.Close()
 
-	for i := 1; i <= 10; i++ {
+	err = postgres.ClearDB()
+	if err != nil {
+		log.Fatalln(errors.New(err.Error()))
+	}
+
+	errs := make(chan error)
+
+	for i := 1; i <= NumberOfUsers; i++ {
 		wg.Add(1)
 
-		go func(i int) {
+		go func(id int) {
 			defer wg.Done()
 
-			urlPost := "https://jsonplaceholder.typicode.com/posts?userId=" + strconv.Itoa(i)
-
-			posts := post.ReadFromJP(urlPost).([]nix.Post)
+			posts, err := handler.GetPostsByUserID(id)
+			if err != nil {
+				errs <- err
+			}
 
 			for _, post := range posts {
 				wg.Add(1)
 
-				go func(post nix.Post) {
+				go func(post model.Post) {
 					defer wg.Done()
 
-					post.WriteToDB(ctx, dbPool, &wg)
+					err = postgres.WritePost(post)
+					if err != nil {
+						errs <- err
+					}
 
-					urlComm := "https://jsonplaceholder.typicode.com/comments?postId=" + strconv.Itoa(post.Id)
-
-					comments := comment.ReadFromJP(urlComm).([]nix.Comment)
+					comments, err := handler.GetCommentsByPostID(post.Id)
+					if err != nil {
+						errs <- err
+					}
 
 					for _, comment := range comments {
 						wg.Add(1)
 
-						go func(comment nix.Comment) {
+						go func(comment model.Comment) {
 							defer wg.Done()
-							comment.WriteToDB(ctx, dbPool, &wg)
+
+							err = postgres.WriteComment(comment)
+							if err != nil {
+								errs <- err
+							}
 						}(comment)
 
 					}
@@ -87,6 +92,17 @@ func main() {
 			}
 		}(i)
 	}
+
+	var once sync.Once
+	go func() {
+		for e := range errs {
+			log.Println(e)
+		}
+
+		once.Do(func() {
+			close(errs)
+		})
+	}()
 
 	wg.Wait()
 }
