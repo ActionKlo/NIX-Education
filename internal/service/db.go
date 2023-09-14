@@ -1,83 +1,46 @@
 package service
 
 import (
+	"NIX-Education/internal/model"
 	"context"
-	"encoding/json"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"io"
-	"log"
-	"net/http"
-	"sync"
 )
 
-type Reader interface {
-	ReadFromJP(url string) interface{}
+type Database interface {
+	WritePost(post model.Post) error
+	WriteComment(comment model.Comment) error
+	ClearDB() error
 }
 
-type Writer interface {
-	WriteToDB(ctx context.Context, dbPool *pgxpool.Pool, wg *sync.WaitGroup)
+type PostgresService struct {
+	DB *pgxpool.Pool
 }
 
-type Post struct {
-	Id, UserId  int
-	Title, Body string
+func (s *PostgresService) WritePost(p model.Post) error {
+	query := "INSERT INTO posts VALUES ($1, $2, $3, $4)"
+	_, err := s.DB.Exec(context.Background(), query, p.Id, p.UserId, p.Title, p.Body)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-type Comment struct {
-	Id, PostId        int
-	Name, Email, Body string
+func (s *PostgresService) WriteComment(c model.Comment) error {
+	query := "INSERT INTO comments VALUES ($1, $2, $3, $4, $5)"
+	_, err := s.DB.Exec(context.Background(), query, c.Id, c.PostId, c.Name, c.Email, c.Body)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (p *Post) ReadFromJP(url string) interface{} {
-	res, err := http.Get(url)
+func (s *PostgresService) ClearDB() error {
+	_, err := s.DB.Exec(context.Background(), "TRUNCATE posts, comments")
 	if err != nil {
-		log.Fatalln("Error get posts:", err)
+		return err
 	}
 
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Fatalln("io.ReadAll body err:", err)
-	}
-
-	var posts []Post
-	err = json.Unmarshal([]byte(body), &posts)
-	if err != nil {
-		log.Fatalln("Unmarshal err:", err)
-	}
-
-	return posts
-}
-
-func (p *Post) WriteToDB(ctx context.Context, dbPool *pgxpool.Pool, wg *sync.WaitGroup) {
-	_, err := dbPool.Exec(ctx, "INSERT INTO posts VALUES ($1, $2, $3, $4)", p.Id, p.UserId, p.Title, p.Body)
-	if err != nil {
-		log.Fatalln("Insert posts error: ", err, p.Id, p.UserId)
-	}
-}
-
-func (c *Comment) ReadFromJP(url string) interface{} {
-	res, err := http.Get(url)
-	if err != nil {
-		log.Fatalln("Error get comments:", err)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Fatalln("io.ReadAll body err:", err)
-	}
-
-	var comments []Comment
-	err = json.Unmarshal([]byte(body), &comments)
-	if err != nil {
-		log.Fatalln("Unmarshal err:", err)
-	}
-
-	return comments
-}
-
-func (c *Comment) WriteToDB(ctx context.Context, dbPool *pgxpool.Pool, wg *sync.WaitGroup) {
-	_, err := dbPool.Exec(ctx, "INSERT INTO comments VALUES ($1, $2, $3, $4, $5)", c.Id, c.PostId, c.Name, c.Email, c.Body)
-	if err != nil {
-		log.Fatalln("Insert posts error: ", err, c.Id, c.PostId)
-	}
+	return nil
 }
